@@ -52,7 +52,7 @@ class BuildProtoCommand(Command):
                   ('outdir=', 'o', 'Where to output .py files.')]
 
   def initialize_options(self):
-    self.skip_proto = False
+    self.skip_proto = True
     try:
       prefix = subprocess.check_output(
           'pkg-config --variable prefix protobuf'.split()).strip().decode(

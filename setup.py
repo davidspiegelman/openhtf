@@ -182,7 +182,7 @@ class PyTestCommand(test):  # pylint: disable=missing-class-docstring
 
 setup(
     name='openhtf',
-    version='1.4.4',
+    version='3.0.0',
     description='OpenHTF, the open hardware testing framework.',
     author='John Hawley',
     author_email='madsci@google.com',

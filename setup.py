@@ -52,6 +52,7 @@ class BuildProtoCommand(Command):
                   ('outdir=', 'o', 'Where to output .py files.')]
 
   def initialize_options(self):
+    return
     self.skip_proto = True
     try:
       prefix = subprocess.check_output(
@@ -85,6 +86,7 @@ class BuildProtoCommand(Command):
     pass
 
   def run(self):
+    return
     if self.skip_proto:
       print('Skipping building protocol buffers.')
       return
@@ -182,7 +184,7 @@ class PyTestCommand(test):  # pylint: disable=missing-class-docstring
 
 setup(
     name='openhtf',
-    version='1.4.4',
+    version='3.0.0',
     description='OpenHTF, the open hardware testing framework.',
     author='John Hawley',
     author_email='madsci@google.com',

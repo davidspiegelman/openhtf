@@ -190,7 +190,7 @@ with open(_README_PATH, 'rb') as fp:
 
 setup(
     name='openhtf',
-    version='3.0.1',
+    version='3.0.2',
     description='OpenHTF, the open hardware testing framework.',
     url='https://github.com/google/openhtf',
     author='The OpenHTF Authors',

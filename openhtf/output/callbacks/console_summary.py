@@ -1,7 +1,22 @@
+# Copyright 2022 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 """Module to display test summary on console."""
 
 import os
 import sys
+from typing import TextIO
 
 from openhtf.core import measurements
 from openhtf.core import test_record
@@ -11,7 +26,9 @@ class ConsoleSummary():
   """Print test results with failure info on console."""
 
   # pylint: disable=invalid-name
-  def __init__(self, indent=2, output_stream=sys.stdout):
+  def __init__(self,
+               indent: int = 2,
+               output_stream: TextIO = sys.stdout) -> None:
     self.indent = ' ' * indent
     if os.name == 'posix':  # Linux and Mac.
       self.RED = '\033[91m'
@@ -37,7 +54,7 @@ class ConsoleSummary():
 
   # pylint: enable=invalid-name
 
-  def __call__(self, record):
+  def __call__(self, record: test_record.TestRecord) -> None:
     output_lines = [
         ''.join((self.color_table[record.outcome], self.BOLD,
                  record.code_info.name, ':', record.outcome.name, self.RESET))
@@ -67,7 +84,8 @@ class ConsoleSummary():
         if not phase_result:  # Timeout.
           output_lines.append('timeout phase: %s [ran for %.2f sec]' %
                               (phase.name, phase_time_sec))
-        elif 'CONTINUE' not in str(phase_result):  # Exception.
+        elif 'CONTINUE' not in str(phase_result) and record.outcome_details:
+          # Exception.
           output_lines.append('%sexception type: %s' %
                               (self.indent, record.outcome_details[0].code))
 

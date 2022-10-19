@@ -1,4 +1,4 @@
-# Copyright 2014 Google Inc. All Rights Reserved.
+# Copyright 2022 Google Inc. All Rights Reserved.
 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -132,16 +132,16 @@ build.sub_commands.insert(0, ('build_proto', None))
 
 INSTALL_REQUIRES = [
     'attrs>=19.3.0',
-    'colorama>=0.3.9,<1.0',
-    'contextlib2>=0.5.1,<1.0',
-    'dataclasses;python_version<"3.7"',
+    'colorama>=0.3.9',
+    'contextlib2>=0.5.1',
     'inflection',
-    'mutablerecords>=0.4.1,<2.0',
-    'oauth2client>=1.5.2,<2.0',
-    'protobuf>=3.6.0,<4.0',
+    'google-auth>=1.34.0',
+    'mutablerecords>=0.4.1',
+    'protobuf>=3.6.0',
     'PyYAML>=3.13',
-    'pyOpenSSL>=20.0.1',
-    'sockjs-tornado>=1.0.3,<2.0',
+    'pyOpenSSL>=17.1.0',
+    'requests>=2.27.1',
+    'sockjs-tornado>=1.0.3',
     'tornado>=4.3,<5.0',
     'typing-extensions',
 ]
@@ -182,14 +182,20 @@ class PyTestCommand(test):  # pylint: disable=missing-class-docstring
     sys.exit(pytest.main(self.pytest_args + cov))
 
 
+_README_PATH = os.path.join(
+        os.path.dirname(os.path.realpath(__file__)), 'README.md')
+with open(_README_PATH, 'rb') as fp:
+    LONG_DESCRIPTION = fp.read().decode('utf-8')
+
+
 setup(
     name='openhtf',
     version='3.0.1',
     description='OpenHTF, the open hardware testing framework.',
-    author='John Hawley',
-    author_email='madsci@google.com',
-    maintainer='Joe Ethier',
-    maintainer_email='jethier@google.com',
+    url='https://github.com/google/openhtf',
+    author='The OpenHTF Authors',
+    long_description=LONG_DESCRIPTION,
+    long_description_content_type='text/markdown',
     packages=find_packages(),
     package_data={
         'openhtf': [
@@ -198,7 +204,7 @@ setup(
             'output/web_gui/dist/img/*', 'output/web_gui/*.*'
         ]
     },
-    python_requires='>=3.6',
+    python_requires='>=3.7',
     cmdclass={
         'build_proto': BuildProtoCommand,
         'clean': CleanCommand,
@@ -207,11 +213,11 @@ setup(
     install_requires=INSTALL_REQUIRES,
     extras_require={
         'usb_plugs': [
-            'libusb1>=1.3.0,<2.0',
-            'M2Crypto>=0.22.3,<1.0',
+            'libusb1>=1.3.0',
+            'M2Crypto>=0.22.3',
         ],
-        'update_units': ['xlrd>=1.0.0,<2.0',],
-        'serial_collection_plug': ['pyserial>=3.3.0,<4.0',],
+        'update_units': ['xlrd>=1.0.0',],
+        'serial_collection_plug': ['pyserial>=3.3.0',],
         'examples': ['pandas>=0.22.0',],
     },
     tests_require=[

@@ -27,12 +27,13 @@ import contextlib
 import copy
 import enum
 import functools
+import itertools
 import logging
 import mimetypes
 import os
 import socket
 import sys
-from typing import Any, Dict, Iterator, List, Optional, Set, Text, TYPE_CHECKING, Union
+from typing import Any, Dict, Iterator, List, Optional, Set, Text, Tuple, TYPE_CHECKING, Union
 
 import attr
 
@@ -78,6 +79,9 @@ class _Infer(enum.Enum):
 # Sentinel value indicating that the mimetype should be inferred.
 INFER_MIMETYPE: Literal[_Infer.INFER] = _Infer.INFER
 MimetypeT = Union[None, Literal[INFER_MIMETYPE], Text]
+
+# MultiDim measurement failure code.
+MULTIDIM_FAIL = 'Multidim Measurement Failure'
 
 
 class BlankDutIdError(Exception):
@@ -382,7 +386,9 @@ class TestState(util.SubscribableStateMixin):
 
   def finalize_from_phase_outcome(
       self,
-      phase_execution_outcome: phase_executor.PhaseExecutionOutcome) -> None:
+      phase_execution_outcome: phase_executor.PhaseExecutionOutcome,
+      phase_name: str,
+  ) -> None:
     """Finalize due to the given phase outcome."""
     if self._is_aborted():
       return
@@ -400,40 +406,89 @@ class TestState(util.SubscribableStateMixin):
       self.test_record.add_outcome_details(code, description)
       if self._outcome_is_failure_exception(phase_execution_outcome):
         self.state_logger.error(
-            'Outcome will be FAIL since exception was of type %s',
-            phase_execution_outcome.phase_result.exc_val)
+            f'Outcome of {phase_name} will be FAIL since exception was of type'
+            ' {phase_execution_outcome.phase_result.exc_val}'
+        )
         self._finalize(test_record.Outcome.FAIL)
       else:
         self.state_logger.critical(
-            'Finishing test execution early due to an exception raised during '
-            'phase execution; outcome ERROR.')
+            f'Finishing test execution of {phase_name} early due to an '
+            'exception raised during phase execution; outcome ERROR.'
+        )
         # Enable CLI printing of the full traceback with the -v flag.
         if isinstance(result, phase_executor.ExceptionInfo):
           self.state_logger.critical(
-              'Traceback:%s%s%s%s',
+              'Traceback:%s%s%s%s\n in executing %s',
               os.linesep,
               phase_execution_outcome.phase_result.get_traceback_string(),
               os.linesep,
               description,
+              phase_name,
           )
         else:
           self.state_logger.critical(
-              'Description:%s',
-              description,
+              f'Description:{description}, PhaseName:{phase_name}'
           )
         self._finalize(test_record.Outcome.ERROR)
     elif phase_execution_outcome.is_timeout:
-      self.state_logger.error('Finishing test execution early due to '
-                              'phase timeout, outcome TIMEOUT.')
-      self.test_record.add_outcome_details('TIMEOUT',
-                                           'A phase hit its timeout.')
+      self.state_logger.error(
+          'Finishing test execution early due to '
+          f'phase {phase_name} experiencing timeout, '
+          'outcome TIMEOUT.'
+      )
+      self.test_record.add_outcome_details(
+          'TIMEOUT', f'Phase {phase_name} hit its timeout.'
+      )
       self._finalize(test_record.Outcome.TIMEOUT)
     elif phase_execution_outcome.phase_result == openhtf.PhaseResult.STOP:
-      self.state_logger.error('Finishing test execution early due to '
-                              'PhaseResult.STOP, outcome FAIL.')
-      self.test_record.add_outcome_details('STOP',
-                                           'A phase stopped the test run.')
+      self.state_logger.error(
+          'Finishing test execution early due to '
+          f'{phase_name} causing PhaseResult.STOP, '
+          'outcome FAIL.'
+      )
+      self.test_record.add_outcome_details(
+          'STOP', f'Phase {phase_name} stopped the test run.'
+      )
       self._finalize(test_record.Outcome.FAIL)
+
+  def _is_failed_multidim_measurement(self, meas: measurements.Measurement
+                                      ) -> bool:
+    """Returns whether the given value is a failed multidim measurement."""
+    return bool(meas.outcome != measurements.Outcome.PASS and meas.dimensions)
+
+  def _get_failed_multidim_measurements(
+      self,
+  ) -> List[Tuple[str, openhtf.core.measurements.Measurement]]:
+    """Gets all the failed phase multidim measurements in the test record.
+
+    Returns:
+      a flat list containing tuples of (measurement_name, measurement) values.
+    """
+    failed_phases = (
+        phase
+        for phase in self.test_record.phases
+        if phase.outcome == test_record.PhaseOutcome.FAIL
+    )
+    phases_meas_items = (phase.measurements.items() for phase in failed_phases)
+    flat_meas_items = itertools.chain.from_iterable(phases_meas_items)
+    failed_multidim_meas = [
+        meas_item
+        for meas_item in flat_meas_items
+        if self._is_failed_multidim_measurement(meas_item[1])
+    ]
+    return failed_multidim_meas
+
+  def _add_multidim_outcome_details(self):
+    """Adds additional outcome details for failed multidim measurements."""
+    failed_multidim_meas = self._get_failed_multidim_measurements()
+
+    for name, measurement in failed_multidim_meas:
+      message = [f' failed_item: {name} ({measurement.outcome})']
+      message.append(f'  measured_value: {measurement.measured_value}')
+      message.append('  validators:')
+      for validator in measurement.validators:
+        message.append(f'   validator: {str(validator)}')
+      self.test_record.add_outcome_details(MULTIDIM_FAIL, '\n'.join(message))
 
   def finalize_normally(self) -> None:
     """Mark the state as finished.
@@ -449,21 +504,28 @@ class TestState(util.SubscribableStateMixin):
       # Vacuously PASS a TestRecord with no phases.
       self._finalize(test_record.Outcome.PASS)
     elif any(
-        phase.outcome == test_record.PhaseOutcome.FAIL for phase in phases):
+        phase.outcome == test_record.PhaseOutcome.FAIL for phase in phases
+    ):
+      # Look for multidim failures to add to outcome details.
+      self._add_multidim_outcome_details()
       # Any FAIL phase results in a test failure.
       self._finalize(test_record.Outcome.FAIL)
     elif all(
-        phase.outcome == test_record.PhaseOutcome.SKIP for phase in phases):
+        phase.outcome == test_record.PhaseOutcome.SKIP for phase in phases
+    ):
       # Error when all phases are skipped; otherwise, it could lead to
       # unintentional passes.
       self.state_logger.error('All phases were skipped, outcome ERROR.')
       self.test_record.add_outcome_details(
-          'ALL_SKIPPED', 'All phases were unexpectedly skipped.')
+          'ALL_SKIPPED', 'All phases were unexpectedly skipped.'
+      )
       self._finalize(test_record.Outcome.ERROR)
     elif any(d.is_failure for d in self.test_record.diagnoses):
       self._finalize(test_record.Outcome.FAIL)
-    elif any(s.outcome == test_record.SubtestOutcome.FAIL
-             for s in self.test_record.subtests):
+    elif any(
+        s.outcome == test_record.SubtestOutcome.FAIL
+        for s in self.test_record.subtests
+    ):
       self._finalize(test_record.Outcome.FAIL)
     else:
       # Otherwise, the test run was successful.
@@ -472,7 +534,8 @@ class TestState(util.SubscribableStateMixin):
 
     self.state_logger.debug(
         'Finishing test execution normally with outcome %s.',
-        self.test_record.outcome.name)
+        self.test_record.outcome.name,
+    )
 
   def abort(self) -> None:
     if self._is_aborted():
@@ -781,7 +844,7 @@ class PhaseState(object):
     if self.phase_record.outcome == test_record.PhaseOutcome.ERROR:
       return
     # Check for errors during diagnoser execution.
-    if self.result is None or self.result.is_terminal:
+    if self.result is None or self.result.is_terminal:  # pytype: disable=attribute-error  # always-use-return-annotations
       self.logger.debug('Phase outcome of %s is ERROR due to diagnoses.',
                         self.name)
       self.phase_record.outcome = test_record.PhaseOutcome.ERROR

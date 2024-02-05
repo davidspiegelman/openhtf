@@ -141,8 +141,6 @@ INSTALL_REQUIRES = [
     'PyYAML>=3.13',
     'pyOpenSSL>=17.1.0',
     'requests>=2.27.1',
-    'sockjs-tornado>=1.0.3',
-    'tornado>=4.3,<5.0',
     'typing-extensions',
 ]
 
@@ -190,7 +188,7 @@ with open(_README_PATH, 'rb') as fp:
 
 setup(
     name='openhtf',
-    version='3.0.3',
+    version='3.0.4',
     description='OpenHTF, the open hardware testing framework.',
     url='https://github.com/google/openhtf',
     author='The OpenHTF Authors',
